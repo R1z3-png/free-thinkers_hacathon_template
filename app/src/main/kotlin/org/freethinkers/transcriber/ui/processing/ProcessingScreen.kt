@@ -1,6 +1,7 @@
 package org.freethinkers.transcriber.ui.processing
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -37,24 +38,26 @@ fun ProcessingScreen(
         Text("Файл: ${state.audioFileName ?: "не выбран"}")
 
         Text("Язык распознавания")
-        OutlinedButton(
-            onClick = { languageMenuExpanded = true },
-            enabled = state.hasAudioFile && !state.isBusy,
-        ) {
-            Text(selectedLanguage?.displayName ?: "Выберите язык")
-        }
-        DropdownMenu(
-            expanded = languageMenuExpanded,
-            onDismissRequest = { languageMenuExpanded = false },
-        ) {
-            RecognitionLanguage.entries.forEach { language ->
-                DropdownMenuItem(
-                    text = { Text(language.displayName) },
-                    onClick = {
-                        languageMenuExpanded = false
-                        onLanguageSelected(language.tag)
-                    },
-                )
+        Box {
+            OutlinedButton(
+                onClick = { languageMenuExpanded = true },
+                enabled = state.hasAudioFile && !state.isBusy,
+            ) {
+                Text(selectedLanguage?.displayName ?: "Select language")
+            }
+            DropdownMenu(
+                expanded = languageMenuExpanded,
+                onDismissRequest = { languageMenuExpanded = false },
+            ) {
+                RecognitionLanguage.entries.forEach { language ->
+                    DropdownMenuItem(
+                        text = { Text(language.displayName) },
+                        onClick = {
+                            languageMenuExpanded = false
+                            onLanguageSelected(language.tag)
+                        },
+                    )
+                }
             }
         }
 
