@@ -10,7 +10,7 @@ object TranscriptJsonSerializer {
             append("[]")
         } else {
             append("[\n")
-            transcript.utterances.forEachIndexed { index, utterance ->
+            transcript.utterances.sortedBy { it.startMs }.forEachIndexed { index, utterance ->
                 append("    {\n")
                 append("      \"speaker_id\": \"").append(escape(utterance.speakerId)).append("\",\n")
                 append("      \"start_ms\": ").append(utterance.startMs).append(",\n")

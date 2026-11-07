@@ -31,4 +31,18 @@ class TranscriptJsonSerializerTest {
             TranscriptJsonSerializer.serialize(transcript),
         )
     }
+
+    @Test
+    fun `serializes utterances in chronological order`() {
+        val transcript = Transcript(
+            listOf(
+                Utterance("speaker_2", 2000, 3000, "second"),
+                Utterance("speaker_1", 1000, 1800, "first"),
+            ),
+        )
+
+        val json = TranscriptJsonSerializer.serialize(transcript)
+
+        assertEquals(true, json.indexOf("\"text\": \"first\"") < json.indexOf("\"text\": \"second\""))
+    }
 }
