@@ -45,13 +45,15 @@ fun TranscriptScreen(
             state.hasNoSpeech -> Text("\u0420\u0435\u0447\u044c \u043d\u0435 \u043e\u0431\u043d\u0430\u0440\u0443\u0436\u0435\u043d\u0430")
             else -> {
                 state.warningMessage?.let { Text("\u041f\u0440\u0435\u0434\u0443\u043f\u0440\u0435\u0436\u0434\u0435\u043d\u0438\u0435: $it") }
-                SelectionContainer {
-                    Column(
-                        modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        state.currentPageUtterances.forEach { utterance ->
-                            UtteranceView(utterance)
+                Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                    SelectionContainer {
+                        Column(
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            state.currentPageUtterances.forEach { utterance ->
+                                UtteranceView(utterance)
+                            }
                         }
                     }
                 }
