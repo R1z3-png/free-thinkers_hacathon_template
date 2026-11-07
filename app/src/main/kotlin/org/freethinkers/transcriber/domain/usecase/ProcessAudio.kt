@@ -5,6 +5,7 @@ import org.freethinkers.transcriber.domain.model.ProcessingStatus
 import org.freethinkers.transcriber.domain.processing.TranscriptionEngine
 import org.freethinkers.transcriber.domain.repository.AudioSessionRepository
 import org.freethinkers.transcriber.domain.repository.ModelRepository
+import kotlinx.coroutines.CancellationException
 
 class ProcessAudio(
     private val sessionRepository: AudioSessionRepository,
@@ -18,7 +19,10 @@ class ProcessAudio(
         val processingSession = currentSession.copy(
             processingStatus = ProcessingStatus.PROCESSING,
             transcript = null,
+            rawTranscript = null,
             warningMessage = null,
+            nonPostProcessingWarningMessage = null,
+            postProcessingWarningMessage = null,
             errorMessage = null,
         )
         sessionRepository.replaceSession(processingSession)
@@ -38,8 +42,19 @@ class ProcessAudio(
             processingSession.copy(
                 processingStatus = ProcessingStatus.COMPLETED,
                 transcript = result.transcript,
+                rawTranscript = result.rawTranscript,
                 warningMessage = result.warningMessage,
+                nonPostProcessingWarningMessage = result.nonPostProcessingWarningMessage,
+                postProcessingWarningMessage = result.postProcessingWarningMessage,
             ).also(sessionRepository::replaceSession)
+        } catch (_: OutOfMemoryError) {
+            processingSession.copy(
+                processingStatus = ProcessingStatus.ERROR,
+                errorMessage = "Недостаточно памяти для обработки этой записи. Попробуйте более короткий аудиофайл.",
+            ).also(sessionRepository::replaceSession)
+        } catch (cancelled: CancellationException) {
+            processingSession.copy(processingStatus = ProcessingStatus.READY).also(sessionRepository::replaceSession)
+            throw cancelled
         } catch (exception: Exception) {
             processingSession.copy(
                 processingStatus = ProcessingStatus.ERROR,

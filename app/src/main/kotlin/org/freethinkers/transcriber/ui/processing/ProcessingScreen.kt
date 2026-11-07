@@ -65,9 +65,13 @@ fun ProcessingScreen(
             "Локальные модели (STT, диаризация и LLM): " +
                 if (state.modelFilesInstalled) "установлены" else "не установлены",
         )
-        Text("Статус показывает наличие файлов моделей в приложении. В оперативную память LLM будет загружаться на время постобработки.")
         if (!state.modelFilesInstalled) {
-            Text("Установка моделей станет доступна после подключения ML-пайплайна.")
+            Text(state.modelSetupMessage ?: "Выполняется подготовка моделей. Это может занять несколько минут при первом запуске.")
+        }
+
+        if (state.isBusy || state.processingStatus == ProcessingStatus.COMPLETED) {
+            val label = if (state.isBusy) "Прошло времени" else "Время обработки"
+            Text("$label: ${formatElapsedTime(state.elapsedMs)}")
         }
 
         Text(processingStatusText(state))
@@ -80,6 +84,13 @@ fun ProcessingScreen(
             Text(if (state.isBusy) "Обработка…" else "Начать обработку")
         }
     }
+}
+
+private fun formatElapsedTime(elapsedMs: Long): String {
+    val totalSeconds = (elapsedMs.coerceAtLeast(0L) + 999L) / 1_000L
+    val minutes = totalSeconds / 60L
+    val seconds = totalSeconds % 60L
+    return "%02d:%02d".format(minutes, seconds)
 }
 
 private fun processingStatusText(state: ProcessingUiState): String = when (state.processingStatus) {

@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import android.net.Uri
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -27,6 +28,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.freethinkers.transcriber.data.audio.AndroidAudioMetadataReader
@@ -35,8 +38,9 @@ import org.freethinkers.transcriber.data.audio.rememberAndroidAudioPicker
 import org.freethinkers.transcriber.data.export.AndroidContentResolverJsonSaver
 import org.freethinkers.transcriber.data.export.TranscriptJsonSerializer
 import org.freethinkers.transcriber.data.models.LocalModelRepository
+import org.freethinkers.transcriber.data.processing.createAndroidAudioProcessingPipeline
 import org.freethinkers.transcriber.data.processing.createDemoTranscriptSource
-import org.freethinkers.transcriber.data.processing.LocalTranscriptionEngine
+import org.freethinkers.transcriber.data.processing.PipelineTranscriptionEngine
 import org.freethinkers.transcriber.data.session.InMemoryAudioSessionRepository
 import org.freethinkers.transcriber.domain.model.ProcessingStatus
 import org.freethinkers.transcriber.domain.model.AudioFile
@@ -45,6 +49,7 @@ import org.freethinkers.transcriber.domain.usecase.ClearAudioSession
 import org.freethinkers.transcriber.domain.usecase.ExportTranscript
 import org.freethinkers.transcriber.domain.usecase.ImportAudio
 import org.freethinkers.transcriber.domain.usecase.ProcessAudio
+import org.freethinkers.transcriber.domain.usecase.RetryPostProcessing
 import org.freethinkers.transcriber.domain.usecase.SelectRecognitionLanguage
 import org.freethinkers.transcriber.ui.audio.AudioScreen
 import org.freethinkers.transcriber.ui.audio.AudioUiState
@@ -58,6 +63,7 @@ import org.freethinkers.transcriber.ui.transcript.TranscriptUiState
 fun App() {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.Audio) }
     var showExitConfirmation by rememberSaveable { mutableStateOf(false) }
+    val context = LocalContext.current.applicationContext
     val sessionRepository = remember { InMemoryAudioSessionRepository() }
     val session by sessionRepository.currentSession.collectAsState()
     var transcriptPage by rememberSaveable { mutableStateOf(0) }
@@ -66,10 +72,27 @@ fun App() {
     LaunchedEffect(session) { transcriptPage = 0 }
     val importAudio = remember(sessionRepository) { ImportAudio(sessionRepository) }
     val clearAudioSession = remember(sessionRepository) { ClearAudioSession(sessionRepository) }
-    val modelRepository = remember { LocalModelRepository() }
-    val transcriptionEngine = remember { LocalTranscriptionEngine() }
+    val modelRepository = remember(context) { LocalModelRepository(context) }
+    var modelFilesInstalled by remember(context) { mutableStateOf(false) }
+    var modelSetupMessage by remember(context) { mutableStateOf<String?>(null) }
+    var processingElapsedMs by rememberSaveable { mutableStateOf(0L) }
+    LaunchedEffect(modelRepository) {
+        val installError = runCatching { modelRepository.installRequiredModels() }.exceptionOrNull()
+        modelFilesInstalled = modelRepository.areRequiredModelsInstalled()
+        modelSetupMessage = when {
+            installError != null -> installError.message ?: "Не удалось подготовить файлы моделей."
+            !modelFilesInstalled -> "Не удалось загрузить нативные библиотеки обработки."
+            else -> null
+        }
+    }
+    val transcriptionEngine = remember(context) {
+        PipelineTranscriptionEngine(createAndroidAudioProcessingPipeline(context))
+    }
     val processAudio = remember(sessionRepository, modelRepository, transcriptionEngine) {
         ProcessAudio(sessionRepository, modelRepository, transcriptionEngine)
+    }
+    val retryPostProcessing = remember(sessionRepository, transcriptionEngine) {
+        RetryPostProcessing(sessionRepository, transcriptionEngine)
     }
     val selectRecognitionLanguage = remember(sessionRepository) {
         SelectRecognitionLanguage(sessionRepository)
@@ -82,14 +105,15 @@ fun App() {
     val processingUiState = ProcessingUiState(
         audioFileName = session?.audioFile?.fileName,
         languageTag = session?.languageTag ?: "ru",
-        modelFilesInstalled = modelRepository.areRequiredModelsInstalled(),
+        modelFilesInstalled = modelFilesInstalled,
+        modelSetupMessage = modelSetupMessage,
         processingStatus = session?.processingStatus,
+        elapsedMs = processingElapsedMs,
         warningMessage = session?.warningMessage,
         errorMessage = session?.errorMessage,
     )
     val processing = session?.processingStatus == ProcessingStatus.PROCESSING
     val activity = LocalContext.current.findActivity()
-    val context = LocalContext.current.applicationContext
     val metadataReader = remember(context) { AndroidAudioMetadataReader(context) }
     val demoTranscriptSource = remember(context) { createDemoTranscriptSource(context) }
     val jsonSaver = remember(context) { AndroidContentResolverJsonSaver(context.contentResolver) }
@@ -120,6 +144,7 @@ fun App() {
                     metadataReader.readAndValidate(uri.toString())
                 }
                 importAudio.execute(audioFile)
+                processingElapsedMs = 0L
                 isDemoTranscriptActive = false
                 sessionBeforeDemo = null
                 audioErrorMessage = null
@@ -191,13 +216,29 @@ fun App() {
                     selectRecognitionLanguage.execute(languageTag)
                 },
                 onStartProcessing = {
-                    coroutineScope.launch { processAudio.execute() }
+                    processingElapsedMs = 0L
+                    coroutineScope.launch {
+                        val startedAt = SystemClock.elapsedRealtime()
+                        val timer = launch {
+                            while (isActive) {
+                                processingElapsedMs = SystemClock.elapsedRealtime() - startedAt
+                                delay(1_000L)
+                            }
+                        }
+                        try {
+                            processAudio.execute()
+                        } finally {
+                            processingElapsedMs = SystemClock.elapsedRealtime() - startedAt
+                            timer.cancel()
+                        }
+                    }
                 },
                 modifier = Modifier.padding(contentPadding),
             )
             AppTab.Transcript -> TranscriptScreen(
                 state = TranscriptUiState.from(session, transcriptPage),
                 onPageChanged = { page -> transcriptPage = page.coerceAtLeast(0) },
+                onRetryPostProcessing = { coroutineScope.launch { retryPostProcessing.execute() } },
                 showDemoResultButton = demoTranscriptSource.isAvailable && !isDemoTranscriptActive,
                 onLoadDemoResult = {
                     try {

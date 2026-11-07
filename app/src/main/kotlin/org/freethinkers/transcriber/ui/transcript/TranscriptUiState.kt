@@ -10,10 +10,16 @@ data class TranscriptUiState(
     val transcript: Transcript? = null,
     val processingStatus: ProcessingStatus? = null,
     val warningMessage: String? = null,
+    val canRetryPostProcessing: Boolean = false,
+    val isRetryingPostProcessing: Boolean = false,
     val errorMessage: String? = null,
     val currentPage: Int = 0,
     val pageSize: Int = DEFAULT_PAGE_SIZE,
 ) {
+    private val sortedUtterances by lazy(LazyThreadSafetyMode.NONE) {
+        transcript?.utterances.orEmpty().sortedBy { it.startMs }
+    }
+
     val currentPageIndex: Int
         get() = currentPage.coerceIn(0, (pageCount - 1).coerceAtLeast(0))
 
@@ -24,7 +30,7 @@ data class TranscriptUiState(
         get() = isExportAvailable && transcript?.utterances?.isEmpty() == true
 
     val orderedUtterances: List<Utterance>
-        get() = transcript?.utterances.orEmpty().sortedBy { it.startMs }
+        get() = sortedUtterances
 
     val pageCount: Int
         get() = if (orderedUtterances.isEmpty()) 0 else (orderedUtterances.size + pageSize - 1) / pageSize
@@ -41,6 +47,8 @@ data class TranscriptUiState(
             transcript = session?.transcript,
             processingStatus = session?.processingStatus,
             warningMessage = session?.warningMessage,
+            canRetryPostProcessing = session?.canRetryPostProcessing == true,
+            isRetryingPostProcessing = session?.processingStatus == ProcessingStatus.PROCESSING && session.rawTranscript != null,
             errorMessage = session?.errorMessage,
             currentPage = currentPage,
         )

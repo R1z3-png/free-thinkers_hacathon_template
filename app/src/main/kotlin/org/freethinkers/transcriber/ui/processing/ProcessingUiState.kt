@@ -6,7 +6,9 @@ data class ProcessingUiState(
     val audioFileName: String? = null,
     val languageTag: String = "ru",
     val modelFilesInstalled: Boolean = false,
+    val modelSetupMessage: String? = null,
     val processingStatus: ProcessingStatus? = null,
+    val elapsedMs: Long = 0L,
     val warningMessage: String? = null,
     val errorMessage: String? = null,
 ) {

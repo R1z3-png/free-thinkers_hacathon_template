@@ -1,6 +1,12 @@
 .gradle/
 .kotlin/
 **/build/
+**/.cxx/
+native-llama/.cmake-fetch/
+native-whisper/.cmake-fetch/
 .idea/
 *.iml
 local.properties
+app/src/main/assets/models/*.bin
+app/src/main/assets/models/*.gguf
+app/src/main/assets/models/*.onnx

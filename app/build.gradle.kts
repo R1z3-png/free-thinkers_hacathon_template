@@ -14,10 +14,17 @@ android {
         versionCode = 1
         versionName = "1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("x86_64", "arm64-v8a")
+        }
     }
 
     buildFeatures {
         compose = true
+    }
+
+    androidResources {
+        noCompress += listOf("bin", "gguf", "onnx")
     }
 
     compileOptions {
@@ -35,12 +42,17 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":native-whisper"))
+    implementation(project(":native-llama"))
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation("com.github.k2-fsa:sherpa-onnx:v1.13.8") {
+        exclude(group = "com.github.k2-fsa.sherpa-onnx", module = "sherpa-onnx-jvm")
+    }
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(platform(libs.junit.bom))

@@ -1,24 +1,67 @@
-# Free Thinkers Hackathon Template
+# Free Thinkers Dictophone
 
-Android starter for the local audio transcription app described in `тз диктофон.docx`.
-The project uses Kotlin, Jetpack Compose, and the Gradle Wrapper.
+Android-приложение для локальной расшифровки MP3 с определением говорящих и сохранением результата в JSON. Приложение и обработка написаны на Kotlin; Python в APK не используется.
 
-## Requirements
+## Готовая сборка
 
-- JDK 25 for the Gradle Kotlin toolchain
-- Android SDK Platform 37
-- IntelliJ IDEA with Android support, or Android Studio
+APK для установки будет опубликован в разделе [GitHub Releases](https://github.com/R1z3-png/free-thinkers_hacathon_template/releases). В APK включены модели и нативные библиотеки для `arm64-v8a` и `x86_64`.
 
-Open this folder as a Gradle project and let the IDE sync. Select the `app` run configuration
-or run `:app:installDebug` on a connected device/emulator.
+## Установка и запуск
 
-## Tests
+Требуются JDK 25, Android SDK Platform 37, Android NDK и CMake 3.22.1. Откройте проект в Android Studio или IntelliJ IDEA с поддержкой Android и выполните Gradle Sync.
+
+Перед сборкой убедитесь, что четыре файла моделей находятся в `app/src/main/assets/models/`. Их имена, источники и SHA-256 перечислены в [инструкции по моделям](app/src/main/assets/models/README.md). Бинарные модели исключены из Git, поэтому после чистого клонирования их нужно получить отдельно и положить в эту папку.
+
+Собрать APK:
+
+```powershell
+.\gradlew.bat :app:assembleDebug
+```
+
+Установить на подключённый телефон или запущенный эмулятор:
+
+```powershell
+.\gradlew.bat :app:installDebug
+```
+
+Либо выберите конфигурацию `app` в IDE и нажмите **Run**. На первом запуске приложение копирует модели в собственное хранилище; для этого нужно около 600 МБ свободного места дополнительно к размеру APK.
+
+## Использование
+
+1. На вкладке **Аудио** выберите MP3 через системный проводник.
+2. На вкладке **Обработка** выберите русский или английский язык и запустите обработку.
+3. На вкладке **Расшифровка** просмотрите реплики и сохраните результат кнопкой **Сохранить JSON**.
+
+Если текстовая постобработка завершилась с предупреждением, на экране расшифровки можно повторить её без повторного распознавания аудио. Демонстрационная расшифровка доступна только в debug-сборке.
+
+## Архитектура и модели
+
+Оркестрация пайплайна, сессии, правила обработки и JSON-экспорт реализованы на Kotlin. Android-слой выбирает аудиофайл, читает метаданные и декодирует звук через MediaCodec. Пайплайн приводит PCM к моно 16 кГц, запускает диаризацию и распознавание, связывает слова с интервалами говорящих, собирает реплики и формирует JSON.
+
+| Модель / компонент | Назначение | Подключение |
+| --- | --- | --- |
+| Whisper `base` Q5_1 (`ggml-base-q5_1.bin`, около 60 МБ) | Распознаёт слова и временные метки | whisper.cpp через JNI |
+| Pyannote segmentation (`segmentation.onnx`, около 6 МБ) | Находит речевые интервалы | sherpa-onnx |
+| 3D-Speaker (`embedding.onnx`, около 40 МБ) | Строит голосовые признаки для группировки говорящих | sherpa-onnx |
+| Qwen2.5-0.5B-Instruct Q4_K_M (`llm.gguf`, около 491 МБ) | Восстанавливает пунктуацию и регистр, сохраняя слова | llama.cpp через JNI |
+
+Пути и проверочные суммы моделей указаны в [манифесте моделей](app/src/main/assets/models/README.md). Файлы из APK устанавливаются автоматически в приватную папку приложения. C++-мосты собраны для `arm64-v8a` и `x86_64`; Kotlin-код проверяет результат Qwen и оставляет исходный текст, если модель изменила распознанные слова.
+
+## Ограничения
+
+- Обработка выполняется локально на CPU; скорость зависит от устройства, а длинные записи могут обрабатываться долго и требовать много памяти.
+- Сессия хранится в памяти приложения и не восстанавливается после завершения процесса.
+- Модели не хранятся в Git. Debug APK с моделями занимает примерно 758 МБ; распространение такой сборки требует отдельного решения по доставке крупных файлов.
+- Для распознавания доступны русский и английский языки. Качество диаризации и распознавания зависит от записи и модели.
+
+## Тесты
 
 ```powershell
 .\gradlew.bat :app:testDebugUnitTest
 ```
 
-GitHub Actions builds the debug app and runs unit tests on every push and pull request.
+## Результаты проверок
 
-The three Compose screens and the processing engine are initial scaffolds. Audio import,
-model installation, transcription, and JSON save-file flow are not implemented yet.
+- `:app:testDebugUnitTest` — **28 тестов пройдено, 0 ошибок**. Проверены формат и сортировка JSON, экранирование текста, жизненный цикл сессии и импорт аудио, состояния обработки, выбор языка, доступность экспорта, пагинация расшифровки и форматирование временных меток.
+- `:app:installDebug` — **сборка и установка успешны** на эмуляторе `x86_64`; в установленном APK присутствуют JNI-библиотеки Whisper и llama.cpp.
+- Автоматические unit-тесты не измеряют качество распознавания и диаризации на реальных аудиозаписях.
