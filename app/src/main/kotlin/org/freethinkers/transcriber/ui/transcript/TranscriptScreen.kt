@@ -27,6 +27,8 @@ fun TranscriptScreen(
     state: TranscriptUiState,
     onPageChanged: (Int) -> Unit,
     onSaveJson: () -> Unit,
+    showDemoResultButton: Boolean,
+    onLoadDemoResult: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -82,6 +84,11 @@ fun TranscriptScreen(
 
         Button(onClick = onSaveJson, enabled = state.isExportAvailable) {
             Text("\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c JSON")
+        }
+        if (showDemoResultButton) {
+            OutlinedButton(onClick = onLoadDemoResult) {
+                Text("\u041f\u043e\u043a\u0430\u0437\u0430\u0442\u044c \u0434\u0435\u043c\u043e-\u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0443")
+            }
         }
     }
 }

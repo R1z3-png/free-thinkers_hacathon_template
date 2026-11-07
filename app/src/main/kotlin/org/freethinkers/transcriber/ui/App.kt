@@ -29,9 +29,12 @@ import org.freethinkers.transcriber.data.audio.rememberAndroidAudioPicker
 import org.freethinkers.transcriber.data.export.AndroidContentResolverJsonSaver
 import org.freethinkers.transcriber.data.export.TranscriptJsonSerializer
 import org.freethinkers.transcriber.data.models.LocalModelRepository
+import org.freethinkers.transcriber.data.processing.createDemoTranscriptSource
 import org.freethinkers.transcriber.data.processing.LocalTranscriptionEngine
 import org.freethinkers.transcriber.data.session.InMemoryAudioSessionRepository
 import org.freethinkers.transcriber.domain.model.ProcessingStatus
+import org.freethinkers.transcriber.domain.model.AudioFile
+import org.freethinkers.transcriber.domain.model.AudioSession
 import org.freethinkers.transcriber.domain.usecase.ClearAudioSession
 import org.freethinkers.transcriber.domain.usecase.ExportTranscript
 import org.freethinkers.transcriber.domain.usecase.ImportAudio
@@ -78,6 +81,7 @@ fun App() {
     val processing = session?.processingStatus == ProcessingStatus.PROCESSING
     val context = LocalContext.current.applicationContext
     val metadataReader = remember(context) { AndroidAudioMetadataReader(context) }
+    val demoTranscriptSource = remember(context) { createDemoTranscriptSource(context) }
     val jsonSaver = remember(context) { AndroidContentResolverJsonSaver(context.contentResolver) }
     val exportTranscript = remember { ExportTranscript() }
     val coroutineScope = rememberCoroutineScope()
@@ -153,6 +157,35 @@ fun App() {
             AppTab.Transcript -> TranscriptScreen(
                 state = TranscriptUiState.from(session, transcriptPage),
                 onPageChanged = { page -> transcriptPage = page.coerceAtLeast(0) },
+                showDemoResultButton = demoTranscriptSource.isAvailable,
+                onLoadDemoResult = {
+                    try {
+                        val transcript = demoTranscriptSource.load()
+                        val currentSession = session
+                        val audioFile = currentSession?.audioFile ?: AudioFile(
+                            contentUri = "demo://transcript-fixture",
+                            fileName = "demo.mp3",
+                            durationMs = transcript.utterances.maxOfOrNull { it.endMs } ?: 0L,
+                            importedAtEpochMs = System.currentTimeMillis(),
+                        )
+                        sessionRepository.replaceSession(
+                            AudioSession(
+                                audioFile = audioFile,
+                                languageTag = currentSession?.languageTag ?: "ru",
+                                processingStatus = ProcessingStatus.COMPLETED,
+                                transcript = transcript,
+                                warningMessage = "\u0414\u0435\u043c\u043e: \u044d\u0442\u043e\u0442 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d \u0438\u0437 JSON-\u043f\u0440\u0438\u043c\u0435\u0440\u0430, \u0430\u0443\u0434\u0438\u043e \u043d\u0435 \u043e\u0431\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043b\u043e\u0441\u044c.",
+                            ),
+                        )
+                        transcriptPage = 0
+                    } catch (error: Exception) {
+                        Toast.makeText(
+                            context,
+                            error.message ?: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c JSON-\u043f\u0440\u0438\u043c\u0435\u0440",
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                },
                 onSaveJson = {
                     val current = session
                     val transcript = current?.transcript
