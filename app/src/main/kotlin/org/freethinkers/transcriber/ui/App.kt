@@ -54,6 +54,8 @@ fun App() {
     val sessionRepository = remember { InMemoryAudioSessionRepository() }
     val session by sessionRepository.currentSession.collectAsState()
     var transcriptPage by rememberSaveable { mutableStateOf(0) }
+    var isDemoTranscriptActive by remember { mutableStateOf(false) }
+    var sessionBeforeDemo by remember { mutableStateOf<AudioSession?>(null) }
     LaunchedEffect(session) { transcriptPage = 0 }
     val importAudio = remember(sessionRepository) { ImportAudio(sessionRepository) }
     val clearAudioSession = remember(sessionRepository) { ClearAudioSession(sessionRepository) }
@@ -110,6 +112,8 @@ fun App() {
                     metadataReader.readAndValidate(uri.toString())
                 }
                 importAudio.execute(audioFile)
+                isDemoTranscriptActive = false
+                sessionBeforeDemo = null
                 audioErrorMessage = null
             } catch (error: AudioImportException) {
                 audioErrorMessage = error.message
@@ -140,6 +144,8 @@ fun App() {
                 onChooseAudio = chooseAudio,
                 onClearSession = {
                     clearAudioSession.execute()
+                    isDemoTranscriptActive = false
+                    sessionBeforeDemo = null
                     audioErrorMessage = null
                 },
                 modifier = Modifier.padding(contentPadding),
@@ -157,7 +163,7 @@ fun App() {
             AppTab.Transcript -> TranscriptScreen(
                 state = TranscriptUiState.from(session, transcriptPage),
                 onPageChanged = { page -> transcriptPage = page.coerceAtLeast(0) },
-                showDemoResultButton = demoTranscriptSource.isAvailable,
+                showDemoResultButton = demoTranscriptSource.isAvailable && !isDemoTranscriptActive,
                 onLoadDemoResult = {
                     try {
                         val transcript = demoTranscriptSource.load()
@@ -168,6 +174,7 @@ fun App() {
                             durationMs = transcript.utterances.maxOfOrNull { it.endMs } ?: 0L,
                             importedAtEpochMs = System.currentTimeMillis(),
                         )
+                        sessionBeforeDemo = currentSession
                         sessionRepository.replaceSession(
                             AudioSession(
                                 audioFile = audioFile,
@@ -177,6 +184,7 @@ fun App() {
                                 warningMessage = "\u0414\u0435\u043c\u043e: \u044d\u0442\u043e\u0442 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442 \u0437\u0430\u0433\u0440\u0443\u0436\u0435\u043d \u0438\u0437 JSON-\u043f\u0440\u0438\u043c\u0435\u0440\u0430, \u0430\u0443\u0434\u0438\u043e \u043d\u0435 \u043e\u0431\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043b\u043e\u0441\u044c.",
                             ),
                         )
+                        isDemoTranscriptActive = true
                         transcriptPage = 0
                     } catch (error: Exception) {
                         Toast.makeText(
@@ -184,6 +192,19 @@ fun App() {
                             error.message ?: "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c JSON-\u043f\u0440\u0438\u043c\u0435\u0440",
                             Toast.LENGTH_SHORT,
                         ).show()
+                    }
+                },
+                showCloseDemoButton = isDemoTranscriptActive,
+                onCloseDemoResult = {
+                    if (isDemoTranscriptActive) {
+                        val previousSession = sessionBeforeDemo
+                        if (previousSession == null) {
+                            clearAudioSession.execute()
+                        } else {
+                            sessionRepository.replaceSession(previousSession)
+                        }
+                        isDemoTranscriptActive = false
+                        sessionBeforeDemo = null
                     }
                 },
                 onSaveJson = {

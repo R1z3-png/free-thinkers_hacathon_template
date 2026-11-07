@@ -10,11 +10,16 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Button
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -29,13 +34,31 @@ fun TranscriptScreen(
     onSaveJson: () -> Unit,
     showDemoResultButton: Boolean,
     onLoadDemoResult: () -> Unit,
+    showCloseDemoButton: Boolean,
+    onCloseDemoResult: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430", fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430", fontWeight = FontWeight.Bold)
+            if (showCloseDemoButton) {
+                IconButton(
+                    onClick = onCloseDemoResult,
+                    modifier = Modifier.semantics {
+                        contentDescription = "\u0417\u0430\u043a\u0440\u044b\u0442\u044c \u0434\u0435\u043c\u043e-\u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0443"
+                    },
+                ) {
+                    Text("\u00d7", fontSize = 24.sp)
+                }
+            }
+        }
         state.audioFileName?.let { fileName ->
             Text(fileName, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
