@@ -1,14 +1,20 @@
 package org.freethinkers.transcriber.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,6 +57,7 @@ import org.freethinkers.transcriber.ui.transcript.TranscriptUiState
 @Composable
 fun App() {
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.Audio) }
+    var showExitConfirmation by rememberSaveable { mutableStateOf(false) }
     val sessionRepository = remember { InMemoryAudioSessionRepository() }
     val session by sessionRepository.currentSession.collectAsState()
     var transcriptPage by rememberSaveable { mutableStateOf(0) }
@@ -81,6 +88,7 @@ fun App() {
         errorMessage = session?.errorMessage,
     )
     val processing = session?.processingStatus == ProcessingStatus.PROCESSING
+    val activity = LocalContext.current.findActivity()
     val context = LocalContext.current.applicationContext
     val metadataReader = remember(context) { AndroidAudioMetadataReader(context) }
     val demoTranscriptSource = remember(context) { createDemoTranscriptSource(context) }
@@ -121,6 +129,33 @@ fun App() {
                 audioErrorMessage = "Не удалось прочитать файл. Выберите другой MP3."
             }
         }
+    }
+
+    BackHandler(enabled = !showExitConfirmation) {
+        showExitConfirmation = true
+    }
+
+    if (showExitConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showExitConfirmation = false },
+            title = { Text("\u0412\u044b\u0439\u0442\u0438 \u0438\u0437 \u043f\u0440\u0438\u043b\u043e\u0436\u0435\u043d\u0438\u044f?") },
+            text = { Text(exitWarningMessage(session)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showExitConfirmation = false
+                        activity?.finish()
+                    },
+                ) {
+                    Text("\u0412\u044b\u0439\u0442\u0438")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExitConfirmation = false }) {
+                    Text("\u041e\u0441\u0442\u0430\u0442\u044c\u0441\u044f")
+                }
+            },
+        )
     }
 
     Scaffold(
@@ -219,4 +254,18 @@ fun App() {
             )
         }
     }
+}
+
+private fun exitWarningMessage(session: org.freethinkers.transcriber.domain.model.AudioSession?): String = when {
+    session?.transcript != null ->
+        "\u041f\u0440\u0438 \u0432\u044b\u0445\u043e\u0434\u0435 \u0442\u0435\u043a\u0443\u0449\u0430\u044f \u0440\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430 \u0431\u0443\u0434\u0435\u0442 \u043f\u043e\u0442\u0435\u0440\u044f\u043d\u0430. \u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u0435 \u0435\u0451 \u0432 JSON, \u0435\u0441\u043b\u0438 \u0445\u043e\u0442\u0438\u0442\u0435 \u043e\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u043a\u043e\u043f\u0438\u044e."
+    session != null ->
+        "\u041f\u0440\u0438 \u0432\u044b\u0445\u043e\u0434\u0435 \u0442\u0435\u043a\u0443\u0449\u0430\u044f \u0441\u0435\u0441\u0441\u0438\u044f \u0431\u0443\u0434\u0435\u0442 \u043f\u043e\u0442\u0435\u0440\u044f\u043d\u0430."
+    else -> "\u0412\u044b \u0443\u0432\u0435\u0440\u0435\u043d\u044b, \u0447\u0442\u043e \u0445\u043e\u0442\u0438\u0442\u0435 \u0432\u044b\u0439\u0442\u0438?"
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
