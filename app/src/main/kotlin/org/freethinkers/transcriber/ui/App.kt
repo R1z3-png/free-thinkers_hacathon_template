@@ -22,14 +22,19 @@ import kotlinx.coroutines.withContext
 import org.freethinkers.transcriber.data.audio.AndroidAudioMetadataReader
 import org.freethinkers.transcriber.data.audio.AudioImportException
 import org.freethinkers.transcriber.data.audio.rememberAndroidAudioPicker
+import org.freethinkers.transcriber.data.models.LocalModelRepository
+import org.freethinkers.transcriber.data.processing.LocalTranscriptionEngine
 import org.freethinkers.transcriber.data.session.InMemoryAudioSessionRepository
 import org.freethinkers.transcriber.domain.model.ProcessingStatus
 import org.freethinkers.transcriber.domain.usecase.ClearAudioSession
 import org.freethinkers.transcriber.domain.usecase.ImportAudio
+import org.freethinkers.transcriber.domain.usecase.ProcessAudio
+import org.freethinkers.transcriber.domain.usecase.SelectRecognitionLanguage
 import org.freethinkers.transcriber.ui.audio.AudioScreen
 import org.freethinkers.transcriber.ui.audio.AudioUiState
 import org.freethinkers.transcriber.ui.navigation.AppTab
 import org.freethinkers.transcriber.ui.processing.ProcessingScreen
+import org.freethinkers.transcriber.ui.processing.ProcessingUiState
 import org.freethinkers.transcriber.ui.transcript.TranscriptScreen
 
 @Composable
@@ -39,10 +44,26 @@ fun App() {
     val session by sessionRepository.currentSession.collectAsState()
     val importAudio = remember(sessionRepository) { ImportAudio(sessionRepository) }
     val clearAudioSession = remember(sessionRepository) { ClearAudioSession(sessionRepository) }
+    val modelRepository = remember { LocalModelRepository() }
+    val transcriptionEngine = remember { LocalTranscriptionEngine() }
+    val processAudio = remember(sessionRepository, modelRepository, transcriptionEngine) {
+        ProcessAudio(sessionRepository, modelRepository, transcriptionEngine)
+    }
+    val selectRecognitionLanguage = remember(sessionRepository) {
+        SelectRecognitionLanguage(sessionRepository)
+    }
     var audioErrorMessage by remember { mutableStateOf<String?>(null) }
     val audioUiState = AudioUiState(
         audioFile = session?.audioFile,
         errorMessage = audioErrorMessage,
+    )
+    val processingUiState = ProcessingUiState(
+        audioFileName = session?.audioFile?.fileName,
+        languageTag = session?.languageTag ?: "ru",
+        modelFilesInstalled = modelRepository.areRequiredModelsInstalled(),
+        processingStatus = session?.processingStatus,
+        warningMessage = session?.warningMessage,
+        errorMessage = session?.errorMessage,
     )
     val processing = session?.processingStatus == ProcessingStatus.PROCESSING
     val context = LocalContext.current.applicationContext
@@ -90,7 +111,16 @@ fun App() {
                 },
                 modifier = Modifier.padding(contentPadding),
             )
-            AppTab.Processing -> ProcessingScreen(Modifier.padding(contentPadding))
+            AppTab.Processing -> ProcessingScreen(
+                state = processingUiState,
+                onLanguageSelected = { languageTag ->
+                    selectRecognitionLanguage.execute(languageTag)
+                },
+                onStartProcessing = {
+                    coroutineScope.launch { processAudio.execute() }
+                },
+                modifier = Modifier.padding(contentPadding),
+            )
             AppTab.Transcript -> TranscriptScreen(Modifier.padding(contentPadding))
         }
     }
